@@ -1,0 +1,17 @@
+# Secrets (never commit these)
+.env
+*.env
+.env.*
+*.key
+*.pem
+credentials*.json
+
+# n8n exports that may contain real data or credentials
+*-with-credentials.json
+*-backup.json
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
