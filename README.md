@@ -4,11 +4,11 @@ A Telegram bot built with n8n that lets a busy person manage tasks by chatting n
 
 ## Demo
 
-personal-assistant-bot
+![Telegram chat with the bot](Screenshots/personal-assistant-bot.jpg)
 
-n8n-workflow-hd
+![Workflow 1 – AI Task Assistant in n8n](Screenshots/n8n-workflow-hd.png)
 
-Screenshot 2026-11-26 121426
+![Workflow 2 – Morning Briefing in n8n](Screenshots/Screenshot%202026-11-26%20121426.png)
 
 ## What it does
 
