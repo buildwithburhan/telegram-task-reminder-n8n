@@ -1,0 +1,147 @@
+{
+  "name": "Workflow 2 – Morning Briefing",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "id": "b7dbb1b9-f0a1-4af0-85e6-bd8174ecbf29",
+      "name": "Every Day 8:00 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -224,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const tz = 'Asia/Karachi';\nconst today = DateTime.now().setZone(tz).startOf('day');\nconst rank = { P1: 1, P2: 2, P3: 3, P4: 4 };\nconst dot = { P1: '🔴', P2: '🟠', P3: '🟡', P4: '⚪' };\nconst esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst fixTime = (t) => {\n  t = String(t ?? '').trim();\n  if (!t) return '';\n  const p = t.split(':');\n  return (p[0].length === 1 ? '0' : '') + p[0] + ':' + String(p[1] || '00').slice(0, 2);\n};\n\nconst rows = $input.all().map((i) => i.json).filter((r) => r.taskId && ['Pending', 'Awaiting confirm'].includes(String(r.status ?? '').trim()));\nconst buckets = { today: [], tomorrow: [], parson: [] };\n\nfor (const r of rows) {\n  const d = DateTime.fromISO(String(r.dueDate ?? '').trim(), { zone: tz }).startOf('day');\n  if (!d.isValid) continue;\n  const diff = Math.round(d.diff(today, 'days').days);\n  const key = diff <= 0 ? 'today' : diff === 1 ? 'tomorrow' : diff === 2 ? 'parson' : null;\n  if (!key) continue;\n  const cat = String(r.category || r.aiSuggested || '').trim();\n  buckets[key].push({ cat, task: r.task, time: fixTime(r.time), date: d, awaiting: String(r.status).trim() === 'Awaiting confirm' });\n}\n\nconst sortFn = (a, b) => (rank[a.cat] || 5) - (rank[b.cat] || 5) || (a.time || '99:99').localeCompare(b.time || '99:99');\nconst line = (x, showDate) => (dot[x.cat] || '❔') + ' <b>' + (x.cat || '?') + '</b> ' + esc(x.task) + (x.time ? ' – ' + x.time : '') + (showDate ? ' (' + x.date.toFormat('d LLL') + ')' : '') + (x.awaiting ? ' <i>(category not confirmed)</i>' : '');\n\nconst sections = [\n  ['today', '📌 <b>Today</b>', false],\n  ['tomorrow', '📅 <b>Tomorrow</b> – ' + today.plus({ days: 1 }).toFormat('ccc d LLL'), false],\n  ['parson', '🗓️ <b>Day after tomorrow</b> – ' + today.plus({ days: 2 }).toFormat('ccc d LLL'), false]\n];\n\nconst focus = [...buckets.today];\nconst p1 = focus.filter((x) => x.cat === 'P1').length;\nconst p2 = focus.filter((x) => x.cat === 'P2').length;\n\nlet msg = '🌅 <b>Good morning!</b> ' + today.toFormat('cccc, d LLL yyyy') + '\\n';\nconst total = buckets.today.length + buckets.tomorrow.length + buckets.parson.length;\n\nif (total === 0) {\n  msg += '\\n✅ No pending tasks for today, tomorrow or the day after. Enjoy your day! 🎉';\n} else {\n  msg += 'Today\\'s focus: <b>' + p1 + ' P1</b>, <b>' + p2 + ' P2</b>' + '\\n';\n  for (const [key, title, showDate] of sections) {\n    const list = buckets[key].sort(sortFn);\n    if (!list.length) continue;\n    msg += '\\n' + title + '\\n' + list.map((x) => line(x, showDate)).join('\\n') + '\\n';\n  }\n  const first = [...buckets.today].sort(sortFn)[0];\n  if (first) msg += '\\n👉 Start with: <b>' + esc(first.task) + '</b>';\n}\n\nmsg += '\\n\\nTo add a new task, just send me a message or a voice note.';\nreturn [{ json: { message: msg } }];\n"
+      },
+      "id": "06e216d0-ab96-462c-bc89-52eda0229505",
+      "name": "Build Morning Briefing",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        592,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_BOSS_CHAT_ID",
+        "text": "={{ $json.message }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "8e30e75e-8299-4f9a-bc12-e5562acd2864",
+      "name": "Send Briefing to Boss",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        832,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Workflow 2 – Morning Briefing\nRoz subah **8:00 (Karachi)** n8n Data Table **\"Boss Tasks\"** padh kar boss ko briefing bhejta hai: Overdue, Aaj, Kal, Parson (P1 se P4 order).\n\n**Setup:** Telegram Bot credential ✅. **Send Briefing to Boss** mein `YOUR_BOSS_CHAT_ID` badlo. Time badalna ho to trigger mein hour change karo.",
+        "height": 188,
+        "width": 568,
+        "color": 4
+      },
+      "id": "f190445d-6fa8-424e-b4ee-bd18dba36c54",
+      "name": "Sticky Note f11034f8",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        368,
+        32
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "cachedResultName": "Boss Tasks",
+          "mode": "id",
+          "value": "YOUR_DATA_TABLE_ID"
+        },
+        "returnAll": true
+      },
+      "id": "ff8a33d5-fb31-4263-9551-d5e5286671af",
+      "name": "Read All Tasks",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        352,
+        384
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Build Morning Briefing": {
+      "main": [
+        [
+          {
+            "node": "Send Briefing to Boss",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Every Day 8:00 AM": {
+      "main": [
+        [
+          {
+            "node": "Read All Tasks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read All Tasks": {
+      "main": [
+        [
+          {
+            "node": "Build Morning Briefing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true,
+    "timezone": "Asia/Karachi"
+  },
+  "nodeGroups": [
+    {
+      "id": "7b36f468-748b-4041-9886-a880dc56723a",
+      "name": "Daily briefing",
+      "nodeIds": [
+        "ff8a33d5-fb31-4263-9551-d5e5286671af",
+        "06e216d0-ab96-462c-bc89-52eda0229505",
+        "8e30e75e-8299-4f9a-bc12-e5562acd2864"
+      ],
+      "description": "Reads pending tasks and sends one P1-P4 numbered list (no dates)"
+    }
+  ],
+  "tags": []
+}

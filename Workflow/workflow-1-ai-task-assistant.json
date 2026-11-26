@@ -1,0 +1,1453 @@
+{
+  "name": "Workflow 1 – AI Task Assistant",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "c45d8d49-1285-4b99-a8c4-d6bbea0b8a45",
+      "name": "Boss Telegram Message",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.5,
+      "position": [
+        -464,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "n1",
+              "name": "chatId",
+              "type": "string",
+              "value": "={{ String($json.message?.chat?.id ?? \"\") }}"
+            },
+            {
+              "id": "n2",
+              "name": "text",
+              "type": "string",
+              "value": "={{ ($json.message?.text ?? \"\").trim() || (($json.message?.voice || $json.message?.audio) ? \"(The boss sent a voice message but it could not be understood. Politely ask him to send it again or type it.)\" : \"(The boss sent something other than text or voice, like a photo or sticker.)\") }}"
+            },
+            {
+              "id": "n3",
+              "name": "firstName",
+              "type": "string",
+              "value": "={{ $json.message?.from?.first_name ?? \"\" }}"
+            },
+            {
+              "id": "n4",
+              "name": "voiceFileId",
+              "type": "string",
+              "value": "={{ $json.message?.voice?.file_id ?? $json.message?.audio?.file_id ?? \"\" }}"
+            },
+            {
+              "id": "n5",
+              "name": "replyTo",
+              "type": "string",
+              "value": "={{ ($json.message?.reply_to_message?.text ?? \"\").slice(0, 500) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f7632e22-0def-47ce-9682-4438b1aeffee",
+      "name": "Normalize Message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -48,
+        752
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.text }}",
+              "operator": {
+                "type": "string",
+                "operation": "startsWith"
+              },
+              "rightValue": "/start"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "9ac61ad2-33ca-48c4-bb06-453cedf4a7b4",
+      "name": "Is /start?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        176,
+        752
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "=Hello {{ $json.firstName }}! 👋\n\nYour Chat ID: <code>{{ $json.chatId }}</code>\n\nI am your task assistant. Just talk to me normally, by text or voice note. For example:\n• Call the client tomorrow at 3 pm\n• What are my tasks today?\n• The client call is done",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "5d7dc2a0-c05a-4f39-8c30-f75f29c5267c",
+      "name": "Send Welcome + Chat ID",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        384,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.chatId }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "rightValue": "YOUR_BOSS_CHAT_ID"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "2b2e43d9-ad63-482b-b89b-1de05107df50",
+      "name": "Only Boss Allowed",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.4,
+      "position": [
+        384,
+        848
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendChatAction",
+        "chatId": "={{ $json.chatId }}"
+      },
+      "id": "4d328d9f-f3c8-4622-877d-4b24c1d4c6fa",
+      "name": "Show Typing",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1024,
+        256
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $(\"Normalize Message\").item.json.replyTo ? \"[The boss is replying to this earlier message: \" + $(\"Normalize Message\").item.json.replyTo + \"]\\n\" : \"\" }}{{ $json.isVoice ? \"[Voice message, transcribed] \" : \"\" }}{{ $json.messageText }}",
+        "options": {
+          "systemMessage": "=You are the personal task assistant of a busy business owner (\"boss\") in Karachi, Pakistan. You chat with him on Telegram like a smart, friendly human assistant.\n\nRight now: {{ $now.setZone(\"Asia/Karachi\").toFormat(\"cccc, d LLLL yyyy, HH:mm\") }} (Asia/Karachi). Today = {{ $now.setZone(\"Asia/Karachi\").toFormat(\"yyyy-MM-dd\") }}.\n\nLANGUAGE AND STYLE\n- ALWAYS reply in simple, clear English only, even when the boss writes or speaks in Urdu, Roman Urdu or a mix. Never reply in Urdu or Roman Urdu.\n- Be warm, polite and professional.\n- Keep replies short: usually 1 to 4 lines. Lists only when showing tasks.\n- Plain text with a few emojis. For bold use **double asterisks** sparingly. No tables, no headings, no other markdown.\n- Never show taskIds or technical words (table, tool, database, JSON, transcript) to the boss.\n- Small talk, greetings, thanks or general questions: just reply normally. Do NOT create a task.\n\nVOICE MESSAGES\n- Messages starting with \"[Voice message, transcribed]\" came from a voice note and were converted to text automatically. They may be in Urdu or English and may contain small transcription mistakes. Understand the meaning sensibly and act on it exactly like a typed message.\n- If the voice text is unclear or could mean different things, briefly say what you understood and ask him to confirm before saving or changing anything.\n- If a message says the voice could not be understood, politely ask him to send it again or type it.\n\nTOOLS\n- Get All Tasks: read all tasks. ALWAYS call it before adding, listing, finding, completing, rescheduling, editing or deleting. Never guess a taskId and never invent tasks. Ignore any row whose status is Done (treat it as already removed).\n- Add Task: save a new task.\n- Reschedule Task: new date/time.\n- Change Category: new P1-P4.\n- Rename Task: new title.\n- Delete Task: permanently remove one task (call it once per task).\n- Set Reminder: set or change the reminder time of an existing task.\n\nADDING TASKS\n- Create a task only when the boss clearly wants something remembered or done later.\n- NO DUPLICATES: before adding, call Get All Tasks and check whether the same task (same meaning, even if worded differently) is already pending. If it is, do NOT add it again; tell the boss it is already on his list, and if he gave new details (time, reminder, category) update the existing task instead.\n- Work out the date: aaj/today = today, kal = tomorrow (for future work), parson = day after tomorrow, weekday names = the next such day. No date given = today.\n- Time in 24h HH:mm. \"3 baje\" during work hours = 15:00 unless subah/morning is said. No time = empty.\n- Category: P1 = urgent AND important, P2 = important not urgent, P3 = urgent not important, P4 = neither. Urgent = due today/tomorrow or a hard deadline. Important = money, clients, payments, legal, health, family, growing the business.\n- Save it right away, then tell the boss in one or two lines what you saved (title, plus time if any; do not mention the date) and the category with a very short reason, and ask if that is fine. If he wants another category, use Change Category.\n- If the message has several tasks, add each one.\n\nCOMPLETED, EDIT, DELETE\n- When the boss says a task is completed (\"done\", \"completed\", \"finished\", \"ho gaya\", \"kar liya\", \"3 is done\"), remove it straight away with Delete Task. Do NOT ask for confirmation.\n- Also delete every duplicate copy of that same task that is still on the list (same meaning, even if worded slightly differently), so it never appears again.\n- If that task repeats daily/weekly/monthly, first add the next occurrence with Add Task, then delete the completed one, and mention it.\n- Reply in one short line, e.g. \"Great ✅ Removed Pipe line works quote from your list.\"\n- If he wants to delete a task that is NOT completed (\"delete\", \"added by mistake\", \"cancel it\"), ask for confirmation naming the task first (\"Should I delete Client payment call?\"), and only call Delete Task after he says yes.\n- \"This one\", \"it\", \"that task\", \"ye wala\", \"isko\" = the task you were just talking about. If more than one different task could match, ask which one (show the short titles).\n- After any change, confirm in one short line.\n\nREMINDERS\n- When the boss asks to be reminded at a specific time (\"remind me at 3\", \"5 baje yaad dilana\", \"kal subah 10 baje yaad karwana\"), save the reminder time as remindAt in \"yyyy-MM-dd HH:mm\" (24-hour, Asia/Karachi).\n- New task + reminder: use Add Task and fill remindAt. Unless he says otherwise, use the same date and time as the task.\n- Reminder for an existing task: call Get All Tasks, then Set Reminder with that taskId.\n- A reminder time must be in the future. If he gives only a time that has already passed today, use tomorrow and tell him.\n- If he asks for a reminder but no time, ask him what time.\n- Confirm in one short line, e.g. \"Okay, I will remind you at 3:00 PM today ⏰\".\n- To cancel a reminder, use Set Reminder with an empty remindAt.\n\nLISTING\n- Show only pending tasks as ONE simple numbered list, grouped by category in this order: P1, P2, P3, P4. Do NOT group by day.\n- Each line shows ONLY the task title, plus the time if the task has one. NEVER show any date or day name in the list.\n- Format exactly like this (skip a category if it has no tasks):\n🔴 P1\n1. Pipe line works quote\n2. Client payment call – 3:00 PM\n🟠 P2\n3. Breakfast with Peter\n🟡 P3\n4. ...\n⚪ P4\n5. ...\n- Keep numbering continuous across categories (1, 2, 3...). Time in 12-hour format. Never use the word \"overdue\".\n- If the same task appears more than once in the data, show it only once.\n- Remember the numbers you showed: if the boss then says \"3 is done\" or \"delete 2\", use the task with that number from your last list.\n- Answer specific questions too (\"what do I have tomorrow?\", \"which are P1?\") in the same numbered style without dates.\n- If nothing matches, say so in a friendly way.\n\nIf something fails, apologise briefly and ask the boss to try again.",
+          "maxIterations": 10,
+          "enableStreaming": false
+        }
+      },
+      "id": "6fe2a9a8-fa27-4d3f-803f-d19d2ee6eeb3",
+      "name": "Task Assistant",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1872,
+        848
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "cachedResultName": "gpt-4o-mini",
+          "mode": "list",
+          "value": "gpt-4o-mini"
+        },
+        "builtInTools": {},
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "1a514b48-77bd-4fdb-b58f-033d52c7810c",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        880,
+        1136
+      ]
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Boss Telegram Message').item.json.message.chat.id }}",
+        "contextWindowLength": 15
+      },
+      "id": "5a75ae02-2a46-473d-88b1-3d6198ec867b",
+      "name": "Chat Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        1024,
+        1136
+      ]
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Returns every task in the boss task table (pending and done). Each row has taskId, task, dueDate (yyyy-MM-dd), time (HH:mm or empty), category (P1-P4), aiReason, status (Pending or Done), repeat. Call this before listing, finding, completing, rescheduling, editing or deleting any task.",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_DATA_TABLE_ID",
+          "cachedResultName": "Boss Tasks"
+        },
+        "returnAll": true
+      },
+      "id": "7cc8b0cd-0934-460e-a15b-2bb76629664b",
+      "name": "Get All Tasks",
+      "type": "n8n-nodes-base.dataTableTool",
+      "typeVersion": 1.1,
+      "position": [
+        1168,
+        1136
+      ]
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Saves one new task for the boss. Use only when the boss clearly wants something remembered or done later.",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_DATA_TABLE_ID",
+          "cachedResultName": "Boss Tasks"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "schema": [
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "taskId",
+              "id": "taskId",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "task",
+              "id": "task",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "dueDate",
+              "id": "dueDate",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "time",
+              "id": "time",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "aiSuggested",
+              "id": "aiSuggested",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "aiReason",
+              "id": "aiReason",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "category",
+              "id": "category",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "status",
+              "id": "status",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "repeat",
+              "id": "repeat",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "reminded",
+              "id": "reminded",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": true,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "remindAt",
+              "id": "remindAt",
+              "required": false,
+              "type": "string"
+            }
+          ],
+          "value": {
+            "aiReason": "={{ $fromAI('reason', `One short line explaining why this category`, 'string') }}",
+            "aiSuggested": "={{ $fromAI('category', `One of P1, P2, P3, P4`, 'string') }}",
+            "category": "={{ $fromAI('category', `One of P1, P2, P3, P4`, 'string') }}",
+            "dueDate": "={{ $fromAI('dueDate', `Due date in yyyy-MM-dd format (Asia/Karachi). Use today if the boss gave no date.`, 'string') }}",
+            "remindAt": "={{ $fromAI('remindAt', `Only if the boss asked to be reminded at a specific time: reminder date and time as yyyy-MM-dd HH:mm (24-hour, Asia/Karachi). Otherwise an empty string.`, 'string') }}",
+            "reminded": "No",
+            "repeat": "={{ $fromAI('repeat', `none, daily, weekly or monthly`, 'string') }}",
+            "status": "Pending",
+            "task": "={{ $fromAI('task', `Short clear task title in English, max 80 characters`, 'string') }}",
+            "taskId": "={{ \"T-\" + $now.setZone(\"Asia/Karachi\").toFormat(\"yyMMdd-HHmmss\") + \"-\" + Math.floor(Math.random() * 90 + 10) }}",
+            "time": "={{ $fromAI('time', `Due time in 24-hour HH:mm, or an empty string if no time was given`, 'string') }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "37fac15a-8b2e-4e12-8b6b-386f1c058eac",
+      "name": "Add Task",
+      "type": "n8n-nodes-base.dataTableTool",
+      "typeVersion": 1.1,
+      "position": [
+        1312,
+        1136
+      ]
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Changes the due date and time of one task. Send both the new date and the new time (keep the old time if the boss did not change it). Needs the exact taskId from Get All Tasks.",
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_DATA_TABLE_ID",
+          "cachedResultName": "Boss Tasks"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "taskId",
+              "keyValue": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('taskId', 'Exact taskId of the task, from Get All Tasks') }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "dueDate": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('dueDate', 'New due date in yyyy-MM-dd') }}",
+            "time": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('time', 'New time in 24-hour HH:mm, or empty string for no time') }}",
+            "reminded": "No"
+          },
+          "schema": [
+            {
+              "id": "dueDate",
+              "displayName": "dueDate",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "time",
+              "displayName": "time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reminded",
+              "displayName": "reminded",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "dfcc9e4f-b531-4c69-bdd7-0f146e30010b",
+      "name": "Reschedule Task",
+      "type": "n8n-nodes-base.dataTableTool",
+      "typeVersion": 1.1,
+      "position": [
+        1584,
+        1136
+      ]
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Changes the priority category (P1, P2, P3 or P4) of one task. Needs the exact taskId from Get All Tasks.",
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_DATA_TABLE_ID",
+          "cachedResultName": "Boss Tasks"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "taskId",
+              "keyValue": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('taskId', 'Exact taskId of the task, from Get All Tasks') }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "category": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('category', 'P1, P2, P3 or P4') }}"
+          },
+          "schema": [
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "95b0f7db-47fd-48e3-8d1b-80929c229a93",
+      "name": "Change Category",
+      "type": "n8n-nodes-base.dataTableTool",
+      "typeVersion": 1.1,
+      "position": [
+        1728,
+        1136
+      ]
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Changes the title text of one task. Needs the exact taskId from Get All Tasks.",
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_DATA_TABLE_ID",
+          "cachedResultName": "Boss Tasks"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "taskId",
+              "keyValue": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('taskId', 'Exact taskId of the task, from Get All Tasks') }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "task": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('task', 'New short task title in English') }}"
+          },
+          "schema": [
+            {
+              "id": "task",
+              "displayName": "task",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "0ca71395-3dd7-41f5-a73f-2983ce3ea9a5",
+      "name": "Rename Task",
+      "type": "n8n-nodes-base.dataTableTool",
+      "typeVersion": 1.1,
+      "position": [
+        1872,
+        1136
+      ]
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Permanently removes one task from the list. Use it right away (no confirmation) when the boss says a task is completed, and also for each duplicate copy of that task. For a task that is NOT completed, use it only after the boss confirms. Needs the exact taskId from Get All Tasks.",
+        "operation": "deleteRows",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_DATA_TABLE_ID",
+          "cachedResultName": "Boss Tasks"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "taskId",
+              "keyValue": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('taskId', 'Exact taskId of the task, from Get All Tasks') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d5c6d28f-ffd3-414e-a4a4-3a272eed9bbc",
+      "name": "Delete Task",
+      "type": "n8n-nodes-base.dataTableTool",
+      "typeVersion": 1.1,
+      "position": [
+        2000,
+        1136
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $(\"Normalize Message\").item.json.chatId }}",
+        "text": "={{ String($json.output ?? \"\").replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\").replace(/\\*\\*(.+?)\\*\\*/g, \"<b>$1</b>\").replace(/^#+\\s*/gm, \"\").slice(0, 4000) }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "f2c6dc1b-efbf-4411-b589-04de16a1b249",
+      "name": "Send Reply to Boss",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2224,
+        752
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $(\"Normalize Message\").item.json.chatId }}",
+        "text": "Sorry, something went wrong on my side 🙏 Please send that again in a moment.",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "ddfc04b0-928b-4e7c-92e1-76768413fe6b",
+      "name": "Send Error Message",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2224,
+        944
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Workflow 1 – AI Task Assistant\nBoss Telegram pe normal baat karte hain (Roman Urdu + English). **Task Assistant** (OpenAI gpt-4o-mini) khud samajhta hai: naya task, list, done, reschedule, category change, rename, delete (confirm ke baad), ya normal baat.\n\n- Tasks: Data Table **\"Boss Tasks\"**\n- Memory: pichle 15 messages (Chat Memory)\n- Sirf boss ki Chat ID allowed\n- /start pe Chat ID bhejta hai\n\nAI ka behaviour badalna ho to **Task Assistant** node → Options → System Message edit karo.",
+        "height": 272,
+        "width": 720,
+        "color": 4
+      },
+      "id": "ae2d2106-8f0d-4a5a-94e2-ddd4e552443f",
+      "name": "Sticky Note 805091b3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -16,
+        64
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $(\"Normalize Message\").item.json.voiceFileId }}",
+              "operator": {
+                "operation": "notEmpty",
+                "singleValue": true,
+                "type": "string"
+              },
+              "rightValue": ""
+            }
+          ],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          }
+        },
+        "options": {}
+      },
+      "id": "f2391486-c151-4513-a207-c8d7faf5f596",
+      "name": "Is Voice Message?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1200,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "fileId": "={{ $(\"Normalize Message\").item.json.voiceFileId }}",
+        "additionalFields": {
+          "mimeType": "audio/ogg"
+        }
+      },
+      "id": "2ce14788-d749-46dc-9702-1ac624f975eb",
+      "name": "Download Voice",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1408,
+        112
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "resource": "audio",
+        "operation": "transcribe",
+        "options": {
+          "temperature": 0
+        }
+      },
+      "id": "98674eb0-0e0f-4937-9c6d-48d55dc62b18",
+      "name": "Transcribe Voice",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        1600,
+        112
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "m1",
+              "name": "messageText",
+              "type": "string",
+              "value": "={{ String($json.text ?? \"\").trim() || $(\"Normalize Message\").item.json.text }}"
+            },
+            {
+              "id": "m2",
+              "name": "isVoice",
+              "type": "boolean",
+              "value": "={{ !!$(\"Normalize Message\").item.json.voiceFileId && !!String($json.text ?? \"\").trim() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e15ff3f6-7329-42ab-ac12-89b4f3dccc19",
+      "name": "Prepare Message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1808,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Sets, changes or cancels the reminder time of one existing task. remindAt must be yyyy-MM-dd HH:mm (24-hour, Asia/Karachi), or an empty string to cancel. Needs the exact taskId from Get All Tasks.",
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "cachedResultName": "Boss Tasks",
+          "mode": "id",
+          "value": "YOUR_DATA_TABLE_ID"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "taskId",
+              "keyValue": "={{ $fromAI('taskId', `Exact taskId of the task, from Get All Tasks`, 'string') }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "remindAt": "={{ $fromAI('remindAt', `Reminder date and time as yyyy-MM-dd HH:mm (24-hour, Asia/Karachi), or empty string to cancel`, 'string') }}",
+            "reminded": "No"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "taskId",
+              "displayName": "taskId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "task",
+              "displayName": "task",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "dueDate",
+              "displayName": "dueDate",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "time",
+              "displayName": "time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "aiSuggested",
+              "displayName": "aiSuggested",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "aiReason",
+              "displayName": "aiReason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "repeat",
+              "displayName": "repeat",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "reminded",
+              "displayName": "reminded",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "remindAt",
+              "displayName": "remindAt",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "607bc9d4-01a1-4527-a9e5-74673a3e6804",
+      "name": "Set Reminder",
+      "type": "n8n-nodes-base.dataTableTool",
+      "typeVersion": 1.1,
+      "position": [
+        2160,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "411999eb-3605-456f-ac5a-88f8c029c0cf",
+      "name": "Every Minute",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        1104
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "cachedResultName": "Boss Tasks",
+          "mode": "id",
+          "value": "YOUR_DATA_TABLE_ID"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "remindAt",
+              "condition": "isNotEmpty"
+            },
+            {
+              "keyName": "status",
+              "keyValue": "Pending"
+            }
+          ]
+        },
+        "returnAll": true
+      },
+      "id": "d5f3f5b9-a609-40e7-a288-7039f4b02517",
+      "name": "Read Tasks for Reminders",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        240,
+        1104
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const tz = 'Asia/Karachi';\nconst now = DateTime.now().setZone(tz);\nconst dot = { P1: '🔴', P2: '🟠', P3: '🟡', P4: '⚪' };\nconst esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n\nconst out = [];\nfor (const item of $input.all()) {\n  const r = item.json;\n  if (!r.taskId || !r.remindAt) continue;\n  if (String(r.status ?? '').trim() !== 'Pending') continue;\n  if (String(r.reminded ?? '').trim().toLowerCase() === 'yes') continue;\n  const at = DateTime.fromFormat(String(r.remindAt).trim(), 'yyyy-MM-dd HH:mm', { zone: tz });\n  if (!at.isValid) continue;\n  const minsLate = now.diff(at, 'minutes').minutes;\n  if (minsLate < 0 || minsLate > 360) continue;\n  const cat = String(r.category || r.aiSuggested || '').trim();\n  const message = '⏰ <b>Reminder</b>\\n\\n' + (dot[cat] || '📌') + ' ' + esc(r.task) + (cat ? ' (' + cat + ')' : '') + '\\n\\nYou asked me to remind you at ' + at.toFormat('h:mm a') + '. Reply \"done\" to this message when it is finished.';\n  out.push({ json: { taskId: r.taskId, message } });\n}\nreturn out;\n"
+      },
+      "id": "237e7275-2272-4781-a43b-1ff103227c39",
+      "name": "Find Due Reminders",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        1104
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_BOSS_CHAT_ID",
+        "text": "={{ $json.message }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "6eb28b9d-23ba-4db3-9dde-2ab2cac3e455",
+      "name": "Send Reminder",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        720,
+        1104
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "cachedResultName": "Boss Tasks",
+          "mode": "id",
+          "value": "YOUR_DATA_TABLE_ID"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "taskId",
+              "keyValue": "={{ $(\"Find Due Reminders\").item.json.taskId }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "reminded": "Yes"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "taskId",
+              "displayName": "taskId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "task",
+              "displayName": "task",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "dueDate",
+              "displayName": "dueDate",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "time",
+              "displayName": "time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "aiSuggested",
+              "displayName": "aiSuggested",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "aiReason",
+              "displayName": "aiReason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "repeat",
+              "displayName": "repeat",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "reminded",
+              "displayName": "reminded",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "remindAt",
+              "displayName": "remindAt",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "959be44c-6ee8-4f6c-b284-1a54c95c1137",
+      "name": "Mark Reminder Sent",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        960,
+        1104
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Boss Telegram Message": {
+      "main": [
+        [
+          {
+            "node": "Normalize Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Message": {
+      "main": [
+        [
+          {
+            "node": "Is /start?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is /start?": {
+      "main": [
+        [
+          {
+            "node": "Send Welcome + Chat ID",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Only Boss Allowed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Only Boss Allowed": {
+      "main": [
+        [
+          {
+            "node": "Show Typing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Task Assistant": {
+      "main": [
+        [
+          {
+            "node": "Send Reply to Boss",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Error Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Task Assistant",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chat Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Task Assistant",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get All Tasks": {
+      "ai_tool": [
+        [
+          {
+            "node": "Task Assistant",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Task": {
+      "ai_tool": [
+        [
+          {
+            "node": "Task Assistant",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reschedule Task": {
+      "ai_tool": [
+        [
+          {
+            "node": "Task Assistant",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Change Category": {
+      "ai_tool": [
+        [
+          {
+            "node": "Task Assistant",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rename Task": {
+      "ai_tool": [
+        [
+          {
+            "node": "Task Assistant",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete Task": {
+      "ai_tool": [
+        [
+          {
+            "node": "Task Assistant",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Show Typing": {
+      "main": [
+        [
+          {
+            "node": "Is Voice Message?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Voice Message?": {
+      "main": [
+        [
+          {
+            "node": "Download Voice",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Voice": {
+      "main": [
+        [
+          {
+            "node": "Transcribe Voice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transcribe Voice": {
+      "main": [
+        [
+          {
+            "node": "Prepare Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Message": {
+      "main": [
+        [
+          {
+            "node": "Task Assistant",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Reminder": {
+      "ai_tool": [
+        [
+          {
+            "node": "Task Assistant",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Every Minute": {
+      "main": [
+        [
+          {
+            "node": "Read Tasks for Reminders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Tasks for Reminders": {
+      "main": [
+        [
+          {
+            "node": "Find Due Reminders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Due Reminders": {
+      "main": [
+        [
+          {
+            "node": "Send Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Reminder": {
+      "main": [
+        [
+          {
+            "node": "Mark Reminder Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true,
+    "timezone": "Asia/Karachi"
+  },
+  "nodeGroups": [
+    {
+      "id": "ed45afcf-1eae-4aa3-9133-62da5e7346ba",
+      "name": "Check sender",
+      "nodeIds": [
+        "f7632e22-0def-47ce-9682-4438b1aeffee",
+        "9ac61ad2-33ca-48c4-bb06-453cedf4a7b4",
+        "5d7dc2a0-c05a-4f39-8c30-f75f29c5267c",
+        "2b2e43d9-ad63-482b-b89b-1de05107df50"
+      ],
+      "description": "Reads the message, replies to /start with the Chat ID and lets only the boss through"
+    },
+    {
+      "id": "86e4983c-bce8-4e70-bb6c-5388079bc762",
+      "name": "Voice to text",
+      "nodeIds": [
+        "4d328d9f-f3c8-4622-877d-4b24c1d4c6fa",
+        "f2391486-c151-4513-a207-c8d7faf5f596",
+        "2ce14788-d749-46dc-9702-1ac624f975eb",
+        "98674eb0-0e0f-4937-9c6d-48d55dc62b18",
+        "e15ff3f6-7329-42ab-ac12-89b4f3dccc19"
+      ],
+      "description": "Shows typing; if the boss sent a voice note it is downloaded and transcribed with OpenAI, then the final text is prepared"
+    },
+    {
+      "id": "1a4cf6be-d204-495a-af0f-c6825512c127",
+      "name": "AI assistant",
+      "nodeIds": [
+        "6fe2a9a8-fa27-4d3f-803f-d19d2ee6eeb3",
+        "1a514b48-77bd-4fdb-b58f-033d52c7810c",
+        "5a75ae02-2a46-473d-88b1-3d6198ec867b",
+        "7cc8b0cd-0934-460e-a15b-2bb76629664b",
+        "37fac15a-8b2e-4e12-8b6b-386f1c058eac",
+        "dfcc9e4f-b531-4c69-bdd7-0f146e30010b",
+        "95b0f7db-47fd-48e3-8d1b-80929c229a93",
+        "0ca71395-3dd7-41f5-a73f-2983ce3ea9a5",
+        "d5c6d28f-ffd3-414e-a4a4-3a272eed9bbc",
+        "607bc9d4-01a1-4527-a9e5-74673a3e6804",
+        "f2c6dc1b-efbf-4411-b589-04de16a1b249",
+        "ddfc04b0-928b-4e7c-92e1-76768413fe6b"
+      ],
+      "description": "The AI reads the message, uses task tools (add, list, done, edit, delete) and replies to the boss in English"
+    },
+    {
+      "id": "19169c55-e9cf-4498-90a2-5ed3bccdd403",
+      "name": "Timed reminders",
+      "nodeIds": [
+        "d5f3f5b9-a609-40e7-a288-7039f4b02517",
+        "237e7275-2272-4781-a43b-1ff103227c39",
+        "6eb28b9d-23ba-4db3-9dde-2ab2cac3e455",
+        "959be44c-6ee8-4f6c-b284-1a54c95c1137"
+      ],
+      "description": "Every minute: finds pending tasks whose reminder time has come, sends the boss a Telegram reminder, then marks it sent"
+    }
+  ],
+  "tags": []
+}
